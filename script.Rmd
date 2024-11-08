@@ -1,11 +1,10 @@
 ---
-title: "Your Title Comes Here"
-subtitle: "Subtitle Comes Here"
-author: "Student(s) Names and Student ID's Come Here"
+title: "Predicting Stock Movement with Company's Financial Data"
+subtitle: "Revenue Growth and Stock Returns"
+author: "Kit Wong"
 date: "Last updated: `r format(Sys.time(), '%d %B, %Y')`"
 output:
   slidy_presentation:
-    font_adjustment: 0
     highlight: haddock
     mathjax: "default"
     df_print: paged
@@ -24,116 +23,234 @@ knitr::opts_chunk$set(
 library(ggplot2) # Useful for creating plots
 library(dplyr)  # Useful for data maipulation
 library(knitr) # Useful for creating nice tables
+library(outliers) 
 
 ```
 
+## Introduction
 
-# RPubs link information
+In recent years, the stock market has been experiencing a surge. It seems like there is a phenomenon that emotions drive market behavior instead of a company's fundamental performance. Some research also indicates that the stock markets may not be truly efficient. Marc G.(2005) study showed the level of security market traders' investment may not be directly associated with the information efficiency of stock price. This is because managers have discretion in investment choices by giving the appropriate incentives to traders. 
 
-- It is not necessary (That is, it is optional and not compulsory) but if you like you can publish your presentation to RPubs (see [here](https://astral-theory-157510.appspot.com/secured/RBootcamp_Course_04.html#creating_an_r_markdown_document_in_r_studio)) and add this link to your presentation here.
+Indeed, the fundamental analysis does provide significant information about future stock returns, especially when considering the long-term trends of a stock movement. In an efficient market, the market price is expected to reflect the estimates of the intrinsic value of a securities.  If discrepancies exist between the market price and the true value of a stock, the market will gradually realign itself toward its calculated intrinsic worth.  In examining a company's fundamental performance, one of the critical variables is the revenue growth rate. Aloke G.(2005) study demonstrated that revenue-growth firms exhibit higher earnings ability than cost-reduction firms.  Narasimhan J. (2022) study revealed a significant correlation between stock price and the magnitude of revenue surprises on the earnings announcement dates. The correlation effect will be weakened after the earnings announcement dates but a weak correlation still exists.  
 
-- Rpubs link comes here: www.........
+## Problem Statement
 
+Did the behavior of the stock market has changed? Is assessing a company's fundamental information still an effective method for predicting stock performance? This project will try to verify this question with a hypothesis test on stock return and revenue growth rate.  Referring to Chris B. (2022) from McKinsey Research, an extra five percentage points of revenue per year correlates with an additional three to four percentage points of total shareholder returns.~[1]~ This project will use the latest stock market information to conduct a hypothesis test on the statement above.
 
-# Introduction
-
-- The following link will help you with creating R Markdown Slidy Presentations
-- http://rmarkdown.rstudio.com/slidy_presentation_format.html
-- Don't forget about [Bootcamp 4](https://astral-theory-157510.appspot.com/secured/RBootcamp_Course_04.html)
-- A good introduction provides a brief background to the problem, defines important terms, and leads to a strong rationale. 
-
-# Introduction Cont.
-
-- Keep everything short and straight to the point. 
-- Use bullet points to help minimise text.
-- Add relevant images to make your presentation more appealing
-- Remember, you have a maximum of 20 slides to fit everything in.
-- Ensure each slide fits on one screen. The reader should not have to scroll down. 
+To simplify the hypothesis statement, this project will examine the relationship between Revenue Growth and Stock Return rates, to determine if stocks exhibit an average of 0.7 Stock Return to Revenue Growth rate. (McKinsey Research Suggested: Stock Return/Revenue Growth Rate = 0.035/0.05 = 0.7)
 
 
-# Problem Statement
+## Data
+This project sourced the S&P500 Companies dataset and the S&P500 Stocks dataset from Kaggle (Larxel, 2024)~[5]~ with a data snapshot from 17 May 2024. The S&P 500 Companies dataset contains the company's basic information and the S&P500 Stocks dataset contains the stock price of stocks listed in the S&P500 index. This project combined 2 files into 1 dataset to obtain the revenue growth rate and year-to-date (YTD) return for stocks from the S&P500 index. The S&P 500 Index is a stock index that measures the performance of 500 leading publicly traded companies in the United States.~[6]~ The stocks in the S&P500 account for approximately 75% of all publicly traded stocks in US stock market.~[7]~ It provides a fair representation of the overall US stock market performance. 
 
-- State the overall problem/question driving the investigation
-- Summarise how you will use statistics to solve the problem or answer your question.
+- Data Retrieval
+  - Load the S&P 500 Stocks and S&P 500 Companies datasets from csv files
+  - Calculate the % of return per stock for the YTD period  (17 May 2023 to 17 May 2024 )  
+   YTD return = ((Current value - Beginning value) / Beginning value) ~[8]~
+  - Merge the S&P 500 Companies dataset and S&P 500 Stocks dataset with filtering fields required in this project
+  - Dataset Fields: Stock Symbol [Symbol],  Company Short Name[Shortname], Company Sector[Sector], Company Industry[Industry], Revenue Growth Rate[Revenuegrowth], YTD Return Rate[YTD Return])
 
-# Data
-
-- You can use multiple slides to break up your sections. 
-- Explain how you collected your data.
-- There should be enough detail here so that someone else could replicate your data collection.
-- Explain the sampling method if known
-- Ensure you reference the data source if you have used Open Data
-
-
-# Data Cont.
-
-- List and explain the important variables. 
-- If you have factors, explain each level.
-- Explain the scale of numeric variables.
-- Justify everything that you do to preprocess the data.
-
-
-# Descriptive Statistics and Visualisation
-
-- Summarise the important variables in your investigation.
-- Use visualisation to highlight interesting features of the data and tell the overall story.
-- Explain how you dealt with data issues (if any), e.g. missing data and outliers.
-- Here are the examples of R chunks and outputs
+## Data (Cont.)
+```{r}
+# Import S&P500 companies and stock price csv file
+comp_df <- data.frame(read.csv( "Data/sp500_companies_20240517.csv", header=TRUE))
+stock_df <- data.frame(read.csv( "Data/sp500_stocks_20240517.csv", header=TRUE))
+# Filter to take the YTD stock price snapshot 
+stock_df_2024 <- stock_df %>% filter(Date == "2024-05-17")
+stock_df_2023 <- stock_df %>% filter(Date == "2023-05-17")
+# Merge the YTD stock price snapshots for YTD return calculation
+stock_df_YTD = merge(stock_df_2023, stock_df_2024, by="Symbol")
+# YTD return calculation
+stock_df_YTD <- mutate(stock_df_YTD, 
+                       Return = ((stock_df_YTD$Adj.Close.y - stock_df_YTD$Adj.Close.x)
+                       /stock_df_YTD$Adj.Close.x))
+# Merge the S&P Companies Dataset with the S&P Stock YTD Return Dataset
+df = merge(subset(comp_df, select = c(Symbol, Shortname, Sector, Industry, Revenuegrowth)), 
+           subset(stock_df_YTD, select = c(Symbol, Return)), by="Symbol")
+# preview dataset size
+dim(df)
+```
+  
+## Descriptive Statistics and Visualisation
+**Missing Values:**
+Missing values are identified from revenue growth and YTD return fields. For revenue growth, missing values have been filled back with data from Google Finance. ~[9]~  For YTD return,  it was discovered that 3 stocks (Symbol: SOLV, GEV, VLTO) were found not listed in the S&P500 index one year ago. Consequently, YTD returns could not be calculated for these stocks, leading to the removal of them from the dataset.~[10]~~[11]~
 
 ```{r}
-plot(Sepal.Length ~ Petal.Length, data = iris)
+# check missing values - Revenuegrowth
+df[(is.na(df$Revenuegrowth) | df$Revenuegrowth==""), 'Symbol' ]
+# fix issue cases with Google Finance data [19]
+df[(df$Symbol=="WDC"), 'Revenuegrowth'] = -0.034
+# check missing values - Return
+df[(is.na(df$Return) | df$Return==""), 'Symbol']
+# fix issue cases by remove it from the dataset. Stocks not listed in S&P500 1yr ago.[10][11]
+df = df[!df$Symbol %in% c("SOLV","GEV","VLTO") ,]
 ```
 
-# Decsriptive Statistics Cont.
+## Decsriptive Statistics and Visualisation (Cont.)
+**Outliners:**
+Use Z-Scores to identify outliners. Stocks with a z-score > than 3 on the return to revenue growth rate were removed. 
+```{r}
+# Construct Return to Revenue Growth Rate column
+df <- mutate(df, Return_to_rev = (df$Return / df$Revenuegrowth))
 
-- You can use the `knitr:kable` function to print nice HTML tables. Here is an example R code:
+# identify outliners - use Z-Scores
+z.scores <- df[complete.cases(df$Return_to_rev),'Return_to_rev'] %>% scores(type ="z")
+df[which(abs(z.scores) > 3),'Symbol']
+# fix outliners
+df = df[!df$Symbol %in% c("AMAT","BLDR","CAT", "CHTR", "GM", "MMC", "NWSA", "PGR", "PHM") ,]
+
+```
+## Decsriptive Statistics and Visualisation (Cont.)
+
+According to the Statistics Summary, I know the Return to Revenue Growth rate sample mean($\overline{x}$) is 1.95.  How unusual is that assuming the population mean($\mu$) of Return to Revenue Growth rate is 0.7? 
 
 ```{r}
-iris %>% group_by(Species) %>% summarise(Min = min(Petal.Length,na.rm = TRUE),
-                                           Q1 = quantile(Petal.Length,probs = .25,na.rm = TRUE),
-                                           Median = median(Petal.Length, na.rm = TRUE),
-                                           Q3 = quantile(Petal.Length,probs = .75,na.rm = TRUE),
-                                           Max = max(Petal.Length,na.rm = TRUE),
-                                           Mean = mean(Petal.Length, na.rm = TRUE),
-                                           SD = sd(Petal.Length, na.rm = TRUE),
-                                           n = n(),
-                                           Missing = sum(is.na(Petal.Length))) -> table1
+# set population mean
+pop_mean <-0.7 
+
+# Statistics Summary
+df %>% summarise( Min = min(Return_to_rev,na.rm = TRUE),
+                  Q1 = quantile(Return_to_rev,probs = .25,na.rm = TRUE),
+                  Median = median(Return_to_rev, na.rm = TRUE),
+                  Q3 = quantile(Return_to_rev,probs = .75,na.rm = TRUE), 
+                  Max = max(Return_to_rev,na.rm = TRUE),
+                  Mean = mean(Return_to_rev, na.rm = TRUE),
+                  SD = sd(Return_to_rev, na.rm = TRUE),
+                  n = n(),
+                  Missing = sum(is.na(Return_to_rev))) -> table1
 knitr::kable(table1)
+
+
+```
+
+## Decsriptive Statistics and Visualisation - Histogram
+```{r,  out.width="70%"}
+df$Return_to_rev %>% hist(main = "Histogram of S&P 500 Stock's Return to Revenue Growth Rate",
+                          ylim = c(0,300), xlab = "Return to Revenue Growth Rate") 
+abline(v = pop_mean, col = "red",lwd = 2)  #Population mean
+abline(v=mean(df$Return_to_rev), col = "blue", lwd = 2)
+legend("topright", cex=0.6,  pt.cex = 1, c("Population Mean", "Sample Mean"), lty=c(1,1), bty = "n",  col = c("red", "blue"))
+
 ```
 
 
-# Hypothesis Testing
+## Decsriptive Statistics and Visualisation - QQplot
+```{r,  out.width="70%"}
+df$Return_to_rev %>% qqnorm(ylab = "Return to Revenue Growth Rate")
+qqline(df$Return_to_rev, col = "black", lwd=1,lty=2)  
+abline(h = pop_mean, col = "red", lwd = 2) #Population mean
+abline(h=mean(df$Return_to_rev), col = "blue", lwd = 2)
+legend("topleft", cex=0.6,  pt.cex = 1, c("Population Mean", "Sample Mean", "QQ Line"), lty=c(1,1,2), bty = "n",  col = c("red", "blue", "black"))
+```
 
-- Apply an appropriate hypothesis test for your investigation. 
-- Ensure you state and check any assumptions. 
-- Report the appropriate values and interpret the results.
-- Here is an example:
+## Hypothesis Testing and Confidence Interval
+**State the Null and Alternate hypothesis:**<br>
+A one-sample t-test was conducted to test the hypothesis because we have a known population mean, a sample mean, and a unknown population standard deviation. The sample size is larger than 30, so I can assume the sampling distribution will be normally distributed.  The Significance level, representing the likelihood of a usual occurrence, for the test was set at 5%.
+
+  $$H_0: \mu_ = 0.7 $$ 
+  $$H_a: \mu_ \neq 0.7 $$
+Null hypothesis: The population mean of the Return to Revenue Growth rate is 0.7 <br>
+Alternate hypothesis: The population mean of the Return to Revenue Growth rate is not 0.7 <br>
 
 ```{r}
-model1 <- lm(Sepal.Length ~ Petal.Length, data = iris)
-model1 %>% summary()
+# set population mean
+pop_mean <-0.7 
 ```
 
-# Hypthesis Testing Cont.
+## Hypothesis Testing and Confidence Interval (Cont.)
+**Decision:** Since the p-value is gather than our significance level $\alpha$ = 0.05, I do not reject the null hypothesis.  Other than that, the 95% CI of the estimated population mean  [-0.3918217, 5.2181602], which does capture $\mu$ = 0.7. The results of the one-sample t-test were therefore not statistically significant. In summary, the average S&P500 YTD Return to Revenue Growth rate was not significantly different from the stated rate 0.7
+```{r}
+t <- t.test(df$Return_to_rev, mu = pop_mean, conf.level = 0.95)
+t.test(df$Return_to_rev, mu = pop_mean)
+```
 
-- Here are the examples of mathematical equations:
+## Regression analysis (Cont.)
+**Hypotheses for the overall linear regression model:**<br>
+Next, this project want to understand does the S&P500 YTD Return to Revenue Growth rate fits the linear regression model for stocks from a specific sector.  Stocks from the Technology sector will be used for this test, below are the hypotheses.
 
-$$H_0: \mu_1 = \mu_2 $$
+Null hypothesis: The data does not fit the linear regression model.
+Alternate hypothesis: The data fits the linear regression model.
 
-$$H_A: \mu_1 \ne \mu_2$$
+Decision Rules: Reject null hypothesis If p value < 0.05 ($\alpha$ significance level).  Test will be statistically significant if reject null hypothesis.
 
-$$S = \sum^n_{i = 1}d^2_i$$
+The sample sizes of stocks from the Technology and Utilities sectors exceed 30.
+```{r}
+dim(df[(df$Sector=="Technology"), ])
+```
 
-- You can also place equations inline: $z = \frac{x - \mu}{\sigma}$
+## Regression analysis (Cont.)
+From the YTD Return against Revenue Growth Rate Scatter Plot, there appears to be a linear positive relationship for stocks from the Technology sector.
 
-# Discussion
+```{r,  out.width="70%"}
+plot(Return ~ Revenuegrowth, data = df[(df$Sector=="Technology"), ],
+     xlab = "Revenue Growth Rate",
+     ylab = "YTD Return")
+```
 
-- Discuss the major findings of your investigation
-- Discuss any strengths and limitations. 
-- Propose directions for future investigations. 
-- This is a good place to re-state your findings as a final conclusion. What is the one take home message the reader should leave with?
-- Your final conclusion needs to be very clear.
+## Regression analysis (Cont.)
+**Is data fit the linear regression model statistically significant?**
 
-# References
+```{r}
+# Fit a linear regression model to the data and assess the fit 
+model1 <- lm(Return ~ Revenuegrowth, data = df[(df$Sector=="Technology"), ])
+model1 %>% summary()
+model1 %>% confint()
+```
+## Regression analysis (Cont.)
+**Is data fit the linear regression model statistically significant?**
 
-- Provide a list of any references you use in the presentation. 
+- The p value for the F-test is really small, F(1, 73) = 80.32, p < 0.001. 
+- The linear model was statistically significant. 
+- The estimated average YTD Return when Revenue Growth Rate = 0 was 0.31074.
+- The intercept of the regression was statistically significant, a = 0.31074, p < 0.001, 95% CI (0.21, 0.42).
+- For every one unit increase in Revenue Growth Rate, YTD Return rate was estimated to increase on average by 1.12.
+- The slope of the regression was statistically significant, b = 1.12202, p < 0.001, 95% CI (0.87, 1.37).
+
+```{r}
+```
+
+## Regression analysis (Cont.)
+**Check the main assumptions for linear regression:**<br>
+- Independence: Independence was assumed as each stock came from a different company.<br>
+- Linearity: The Residual vs. Fitted scatter plot suggested a linear relationship. The trend line is considered flat. Variability on y axis is constant across the range of values on the x asix.  No sign of heteroscedasticity.<br>
+- Normality of residuals: The residuals fall close to the QQline. The normal Q-Q plot didn't indicate obvious evidence of departures from normality.
+```{r,  out.width="55%"}
+par(mfrow=c(1,2))
+model1 %>% plot(which = 1)
+model1 %>% plot(which = 2)
+```
+
+## Regression analysis
+**Check the main assumptions for linear regression**<br>
+- Influential cases: The Residuals vs Leverage scatter plot found 2 values fall within band 1.  There appeared to be 2 influential cases that could have a disproportional impact on the fit of the regression model.  These 2 outliners should be removed.<br>
+- Homoscedasticity: If excluded the outliner points identified from the Residuals vs Leverage plot, the variance in residuals is consistent across fitted values in the Scale-Location plot. The polt presents a Homoscedasticity outlook.
+```{r,  out.width="50%"}
+par(mfrow=c(1,2))
+model1 %>% plot(which = 3)
+model1 %>% plot(which = 5)
+```
+
+
+## Discussion
+
+- From the Hypotheses Testing, this project found the average S&P500 YTD Return to Revenue Growth rate was not significantly different from the stated rate, captured from McKinsey Research,  0.7.
+- From the Hypotheses Testing of does the S&P500 YTD Return to Revenue Growth rate fits the linear regression model for stocks from a Technology sector, this project found the linear model was statistically significant.
+- The hypothesis testing offers a clear and straightforward method for concluding our hypotheses. It is user-friendly and easy to understand.  However, a drawback of hypothesis testing is its restricted to test only one parameter at a time.  Typically, stock analysis requires the consideration of multiple variables. If I want to prove another fundamental variable relationship to stock return, a separate hypothesis test would be required, which can be time-consuming.
+- If this project can be extended, I aim to examine the relationship of YTD Return to Revenue Growth across various sectors, like the Utilities sector, to assess whether the data exhibits different behaviors from different sectors.
+- This project has demonstrated that, on average, the revenue growth rate from the company's fundamental information on average has exhibited a positive linear relationship with the mid-term year-to-date (YTD) Return.  Despite the presence of emotional buying activity observed in the Technology sector this year, the data behavior of the YTD Return to Revenue Growth rate remains valid. Therefore, investors should not overlook the importance of the company's fundamental information.
+
+## References
+<font size="1.8">[1] Chris B., Rebecca D., Nicholas N., Tido R. (2022). Empirical research reveals what it takes to generate value-creating growth today. Mckinsey & Company. Retrieved May 20, 2024 from https://www.mckinsey.com/capabilities/strategy-and-corporate-finance/our-insights/the-ten-rules-of-growth</font><br> 
+<font size="1.8">[2] Aloke G., Zhaoyang G., Prem C. Jain (2005). Sustained Earnings and Revenue Growth, Earnings
+Quality, and Earnings Response Coefficients. Springer Science. Retrieved May 21, 2024 from https://link.springer.com/article/10.1007/s11142-004-6339-3</font><br> 
+<font size="1.8">[3] Marc G., Timothy K., David W (2005). Emotions can drive market behavior in a few short-lived situations. But fundamentals still rule. Mckinsey & Company. Retrieved May 21, 2024 from https://www.mckinsey.com/capabilities/strategy-and-corporate-finance/our-insights/do-fundamentalsor-emotionsdrive-the-stock-market</font><br> 
+<font size="1.8">[4] Narasimhan J. (2022). Revenue Growth and Stock Returns. S&P Global. Retrieved May 21, 2024 from https://papers.ssrn.com/sol3/papers.cfm?abstract_id=314962
+<font size="1.8">[5] Larxel (2004). S&P 500 Stocks (daily updated). Kaggle. Retrieved May 20, 2024 from https://www.kaggle.com/datasets/andrewmvd/sp-500-stocks/data</font><br> 
+<font size="1.8">[6] Will K (2023). S&P 500 Index: What It’s for and Why It’s Important in Investing. Investopedia. Retrieved May 20, 2024 from https://www.investopedia.com/terms/s/sp500.asp</font><br> 
+<font size="1.8">[7] Paula P. (2021). What Are the S&P 500, the Nasdaq, and the Dow?. The Balance Money. Retrieved May 21, 2024 from https://www.thebalancemoney.com/the-sandp-500-nasdaq-dow-jones-what-is-this-stuff-453745#:~:text=The%20S%26P%20500%20tracks%20500%20large%20U.S.%20companies,represent%20roughly%2075%25%20of%20all%20publicly%20traded%20stocks.</font><br> 
+<font size="1.8">[8] Claire B. (2023). How Do I Calculate the Year-to-Date (YTD) Return on My Portfolio?. Investopedia. Retrieved May 20, 2024 from https://www.investopedia.com/ask/answers/060115/how-do-i-calculate-my-yeartodate-ytd-return-my-portfolio.asp</font><br> 
+<font size="1.8">[9] Google Finance(2024). Western Digital Corp. Retrieved May 20, 2024 from https://www.google.com/finance/quote/WDC:NASDAQ</font><br> 
+<font size="1.8">[10] Yahoo Finance. (2024). GE Vernova and Solventum Set to Join S&P 500; Dentsply Sirona to Join S&P MidCap 400; Others to Join S&P SmallCap 600. Retrieved May 20, 2024 from https://finance.yahoo.com/news/ge-vernova-solventum-set-join-221200444.html</font><br> 
+<font size="1.8">[11] Nasdaq(2023). Veralto To Be Added To S&P 500. Retrieved May 20, 2024 from https://www.nasdaq.com/articles/veralto-to-be-added-to-sp-500</font><br> 
+<font size="1.8">[12] Dr.Laleh T(2024). Week 08- Class Worksheet Answers. RMIT - Applied Analytics (MATH1324). Retrieved May 20, 2024 from https://rmit.instructure.com/courses/124444/files/36559873/download?download_frd=1</font><br> 
+<font size="1.8">[13] Dr.Laleh T(2024). Week 11- Class Worksheet Answers.pdf. RMIT - Applied Analytics (MATH1324). Retrieved May 20, 2024 from https://rmit.instructure.com/courses/124444/files/36559844/download?download_frd=1</font><br> 
